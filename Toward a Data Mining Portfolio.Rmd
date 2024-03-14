@@ -1,0 +1,99 @@
+---
+title: "Project Based- Toward a Data Mining Portfolio"
+author: "Chun Wang"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+## Import and parse breast cancer data set
+require(mlbench)
+# load the data set
+data(BreastCancer)
+# so remove rows with missing values
+BreastCancer <- na.omit(BreastCancer) 
+# remove the unique identifier
+BreastCancer$Id <- NULL 
+#data partition
+library(e1071)
+library(caret)
+trainIndex <- createDataPartition(BreastCancer$Class, p=0.7, list=FALSE)
+cancer.train.set<- BreastCancer[trainIndex,]
+cancer.test.set<-BreastCancer[-trainIndex,]
+```
+
+
+```{r}
+
+## Classifier 1:  Decision Tree
+library(rpart)
+# train the model
+cancer.dt<-rpart(Class~., data=cancer.train.set)
+#prediction
+cancer.dt.pre <- predict(cancer.dt, newdata=cancer.test.set,type="class")
+# confusion matrix
+table(cancer.dt.pre,cancer.test.set$Class)
+```
+
+```{r}
+## Classifier 2 : super vector machines
+library(e1071)
+#trian the model
+cancer.svm <- svm(Class ~ ., data= cancer.train.set)
+#predict
+cancer.svm.pre <- predict(cancer.svm, newdata=cancer.test.set)
+# reslut
+table(cancer.svm.pre,cancer.test.set$Class)
+
+```
+
+```{r}
+## Classifier 3: Regularised Discriminant Analysis
+library(klaR)
+cancer.da <- rda(Class~ ., cancer.train.set)
+cancer.da.pre <- predict(cancer.da, cancer.test.set)
+table(cancer.da.pre$class,cancer.test.set$Class)
+
+```
+
+```{r}
+## Classifier #4 : Random Forests
+library(randomForest)
+cancer.rf <- randomForest(Class ~ .,cancer.train.set)
+cancer.rf.pre <- predict(cancer.rf, cancer.test.set)
+table(cancer.rf.pre, cancer.test.set$Class)
+
+```
+
+```{r}
+## Combine the classifiers in an ensemble
+predictionslist<-list(dt=cancer.dt.pre, svm=cancer.svm.pre, da=cancer.da.pre$class,
+                      rf=cancer.rf.pre)
+#combine into a dataframe
+combinedclassifiers<-data.frame(predictionslist)
+
+#majority voting
+library(dplyr)
+combinedcalssifiers <- combinedclassifiers %>%
+  mutate_all(~factor(., levels = unique(cancer.test.set$Class)))
+
+# Determine the mode 
+mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+finalPredictions <- apply(combinedclassifiers, 1, mode)
+finalPredictions <- factor(finalPredictions, levels = levels(cancer.test.set$Class))
+
+# Evaluation
+confusionMatrix(finalPredictions, cancer.test.set$Class)
+
+```
+
